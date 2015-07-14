@@ -63,11 +63,18 @@ class WindowMLP(NNBase):
         NNBase.__init__(self, param_dims, param_dims_sparse)
 
         random.seed(rseed) # be sure to seed this for repeatability!
+        
         #### YOUR CODE HERE ####
-
         # any other initialization you need
-
-
+        
+        # init W & U
+        self.params.W = random_weight_matrix(dims[1], dims[0])
+        self.params.U = random_weight_matrix(dims[2], dims[1])
+        # init b1 & b2
+        self.params.b1 = zeros((dims[1],))
+        self.params.b2 = zeros((dims[2],))
+        # init L
+        self.sparams.L = wv.copy()
 
         #### END YOUR CODE ####
 
@@ -88,15 +95,34 @@ class WindowMLP(NNBase):
         self.grads.U += (your gradient dJ/dU)
         self.sgrads.L[i] = (gradient dJ/dL[i]) # this adds an update for that index
         """
-        #### YOUR CODE HERE ####
+        #### YOUR CODE HERE ####        
+        
+        # get word vectors for the window
+        x = self.sparams.L[window, :].ravel()
 
         ##
         # Forward propagation
+        h = tanh(self.params.W.dot(x) + self.params.b1)
+        y_h = softmax(self.params.U.dot(h) + self.params.b2)
 
         ##
         # Backpropagation
+        # check details in the part1-NER notebook
 
-
+        delta_2 = y_h
+        delta_2[label] -= 1.0
+        
+        self.grads.U += outer(delta_2, h) + self.lreg * self.params.U
+        self.grads.b2 += delta_2
+        
+        delta_1 = self.params.U.T.dot(delta_2) * (1 - h ** 2)
+        
+        self.grads.W += outer(delta_1, x) + self.lreg * self.params.W
+        self.grads.b1 += delta_1
+               
+        # get the middle part of W
+        mi = self.sparams.L.shape[1]
+        self.sgrads.L[window[1]] = self.params.W[:,arange(mi, mi+mi)].T.dot(delta_1)
 
         #### END YOUR CODE ####
 
@@ -114,10 +140,24 @@ class WindowMLP(NNBase):
         # handle singleton input by making sure we have
         # a list-of-lists
         if not hasattr(windows[0], "__iter__"):
-            windows = [windows]
+            windows = array(windows)[newaxis,:]
+
 
         #### YOUR CODE HERE ####
-
+        P = zeros((windows.shape[0], self.params.U.shape[0]))
+        
+        # loop over rows and compute probabilities
+        for n in arange(windows.shape[0]):
+            # forward propagation
+            #
+            # get word vectors for the window
+            x = self.sparams.L[windows[n,:], :].ravel()
+    
+            h = tanh(self.params.W.dot(x) + self.params.b1)
+            y_h = softmax(self.params.U.dot(h) + self.params.b2)
+            
+            P[n, :] = y_h
+            
 
         #### END YOUR CODE ####
 
@@ -133,6 +173,11 @@ class WindowMLP(NNBase):
 
         #### YOUR CODE HERE ####
 
+        # get proba
+        P = self.predict_proba(windows)
+        
+        # get maximum in each row
+        c = argmax(P, axis=1)
 
         #### END YOUR CODE ####
         return c # list of predicted classes
@@ -146,6 +191,20 @@ class WindowMLP(NNBase):
         """
 
         #### YOUR CODE HERE ####
+        # handle singleton input by making sure we have
+        # a list-of-lists
+        if not hasattr(windows[0], "__iter__"):
+            windows = array(windows)[newaxis,:]
+            
+        # compute proba
+        P = self.predict_proba(windows)
+        
+        # cross entropy loss
+        ce = -1. * sum(log(P[arange(windows.shape[0]), labels]))
+        # regularizaiton loss
+        reg = (self.lreg / 2.) * (sum(self.params.W ** 2) + sum(self.params.U ** 2))
+        
+        J = ce + reg
 
 
         #### END YOUR CODE ####
