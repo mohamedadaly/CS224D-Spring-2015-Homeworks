@@ -5,7 +5,7 @@ import sys
 
 # Import NN utils
 from nn.base import NNBase
-from nn.math import softmax, sigmoid
+from nn.math import softmax, sigmoid, make_onehot
 from nn.math import MultinomialSampler, multinomial_sample
 from misc import random_weight_matrix
 
@@ -42,13 +42,23 @@ class RNNLM(NNBase):
         NNBase.__init__(self, param_dims, param_dims_sparse)
 
         #### YOUR CODE HERE ####
+        self.bptt = bptt
+        self.alpha = alpha
 
-
+        random.seed(rseed)
+        
         # Initialize word vectors
         # either copy the passed L0 and U0 (and initialize in your notebook)
         # or initialize with gaussian noise here
+        if U0 is None:
+            self.params.U = random.randn(self.vdim, self.hdim)
+        else:
+            self.params.U = U0.copy()
+            
+        self.sparams.L = L0.copy()
 
         # Initialize H matrix, as with W and U in part 1
+        self.params.H = random_weight_matrix(self.hdim, self.hdim)
 
         #### END YOUR CODE ####
 
@@ -97,12 +107,40 @@ class RNNLM(NNBase):
 
         ##
         # Forward propagation
+        for t in arange(0, ns):
+            # hidden layer at time t: word t has entry in hs[t+1]
+            hs[t+1] = sigmoid(self.params.H.dot(hs[t]) + self.sparams.L[xs[t]])
+            # output layer at time t
+            ps[t] = softmax(self.params.U.dot(hs[t+1]))
 
 
         ##
         # Backward propagation through time
 
-
+        # loop on each word
+        for w in arange(0, ns):
+            # make one-hot vector
+            y = make_onehot(ys[w], self.vdim)
+            # delta_1 = y_hat - y
+            delta_1 = ps[w] - y
+            # U
+            self.grads.U += outer(delta_1, hs[w+1])
+            # delta
+            delta = self.params.U.T.dot(delta_1) * (hs[w+1] * (1 - hs[w+1]))
+            # H
+            self.grads.H += outer(delta, hs[w])
+            # L_x
+            self.sgrads.L[xs[w]] = delta
+            
+            # now go backward through time: w-1 ... w-bptt
+            # TODO: check w - self.bptt -1 or wihtout -1
+            for t in arange(w - 1, max(-1, w - self.bptt), -1):
+                # delta: h for word t is in h[t+1]
+                delta = self.params.H.T.dot(delta) * (hs[t+1] * (1 - hs[t+1]))
+                # H
+                self.grads.H += outer(delta, hs[t])
+                # L
+                self.sgrads.L[xs[t]] = delta
 
         #### END YOUR CODE ####
 
@@ -138,7 +176,17 @@ class RNNLM(NNBase):
 
         J = 0
         #### YOUR CODE HERE ####
-
+        
+        ns = len(xs)
+        # Forward propagation
+        h = zeros((self.hdim,))
+        for t in arange(0, ns):
+            # hidden layer at time t: word t has entry in hs[t+1]
+            h = sigmoid(self.params.H.dot(h) + self.sparams.L[xs[t]])
+            # output layer at time t
+            p = softmax(self.params.U.dot(h))
+            # update J
+            J += -log(p[ys[t]])
 
         #### END YOUR CODE ####
         return J
@@ -197,7 +245,29 @@ class RNNLM(NNBase):
         ys = [init] # emitted sequence
 
         #### YOUR CODE HERE ####
-
+        
+        # initial h
+        h = zeros((self.hdim,))
+        
+        # loop and forward propagation        
+        t = 0
+        while t < 100:
+            # hidden layer at time t
+            h = sigmoid(self.params.H.dot(h) + self.sparams.L[ys[t]])
+            # output layer at time t
+            p = softmax(self.params.U.dot(h))
+            # sample next word
+            y = multinomial_sample(p)
+            # add
+            ys.append(y)
+            # update J
+            J += -log(p[y])
+            
+            # check
+            if y == end:
+                break
+            else:
+                t += 1
 
         #### YOUR CODE HERE ####
         return ys, J
