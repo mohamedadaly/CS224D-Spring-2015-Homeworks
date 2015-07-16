@@ -1,2 +1,4 @@
 *.zip
 /PS1/Other Solution
+*.pyc
+__MACOSX
