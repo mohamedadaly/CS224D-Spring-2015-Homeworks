@@ -24,6 +24,7 @@ import pdb
 # Create your plots here
 
 def run(args=None):
+    print args
     usage = "usage : %prog [options]"
     parser = optparse.OptionParser(usage=usage)
 
@@ -57,6 +58,7 @@ def run(args=None):
     parser.add_option("--model",dest="model",type="string",default="RNN")
 
     (opts,args)=parser.parse_args(args)
+    print opts
 
 
     # make this false if you dont care about your accuracies per epoch, makes things faster!
@@ -125,9 +127,21 @@ def run(args=None):
         print dev_accuracies
         # TODO:
         # Plot train/dev_accuracies here?
+        plt.figure()
+        plt.hold()
+        plt.plot(train_accuracies, '-sr')
+        plt.plot(dev_accuracies, '-dg')
+        plt.legend(['Train', 'Dev'])
+        plt.show()
+        
+        # find best dev accuracy
+        idx = np.argmax(dev_accuracies)
+        print "Best epoch for validation set: %d" % idx
 
-def test(netFile,dataSet, model='RNN', trees=None):
+def test(netFile,dataSet, model='RNN', trees=None):    
+    show_conf = False
     if trees==None:
+        show_conf = True
         trees = tr.loadTrees(dataSet)
     assert netFile is not None, "Must give model to test"
     print "Testing netFile %s"%netFile
@@ -161,8 +175,15 @@ def test(netFile,dataSet, model='RNN', trees=None):
     
     # TODO
     # Plot the confusion matrix?
-
-    
+    if show_conf:
+        from sklearn.metrics import confusion_matrix as cf
+        conf_arr = cf(correct, guess)
+        plt.figure()    
+        plt.matshow(conf_arr)
+        plt.ylabel('True label')
+        plt.xlabel('Predicted label')
+        plt.set_cmap('jet')
+        plt.show()
     
     print "Cost %f, Acc %f"%(cost,correct_sum/float(total))
     return correct_sum/float(total)

@@ -10,6 +10,9 @@ import pdb
 
 # tip: insert pdb.set_trace() in places where you are unsure whats going on
 
+def softmax(x):
+    xt = np.exp(x - np.max(x))
+    return xt / np.sum(xt)
 
 class RNN2:
 
@@ -114,6 +117,44 @@ class RNN2:
         cost  =  total = 0.0
         # this is exactly the same setup as forwardProp in rnn.py
         
+        # Will do it recursively starting at the root
+        #
+        # a leaf node? then just have a hidden layer and a softmax layer
+        if node.isLeaf:
+            # set h1 to its word vector
+            node.hActs1 = self.L[:, node.word]
+            # compute h2
+            node.hActs2 = np.maximum(0.0, 
+                                     self.W2.dot(node.hActs1) + self.b2)
+            # compute prob
+            node.probs = softmax(self.Ws.dot(node.hActs2) + self.bs)
+            
+        # Not a leaf, so has two children
+        else:
+            # compute the two children first
+            c1, t1 = self.forwardProp(node.left, correct, guess)
+            c2, t2 = self.forwardProp(node.right, correct, guess)
+            cost += c1 + c2
+            total += t1 + t2
+            
+            # compute h1
+            node.hActs1 = np.maximum(self.W1.dot(
+                np.concatenate((node.left.hActs1, node.right.hActs1))) + \
+                self.b1, 0.0)
+            # compute h2
+            node.hActs2 = np.maximum(0.0,
+                                     self.W2.dot(node.hActs1) + self.b2)
+            # compute prob
+            node.probs = softmax(self.Ws.dot(node.hActs2) + self.bs)
+
+        # compute cost
+        cost += - np.log(node.probs[node.label])
+        # fprop
+        node.fprop = True
+        # add correct 
+        correct.append(node.label)
+        # and guess (0-based labels)
+        guess.append(np.argmax(node.probs))
 
         return cost, total + 1
 
@@ -123,8 +164,57 @@ class RNN2:
         node.fprop = False
 
         # this is exactly the same setup as backProp in rnn.py
+
+        # default error from above (delta_a in notes)
+        if error is None:
+            error = np.zeros((self.wvecDim,))
+
+        # Recursive backprop from the root
+        #
+        # error due to softmax (delta_3 in notes)
+        d3 = node.probs.copy()
+        d3[node.label] -= 1
         
+        # Ws(U) and bs
+        self.dWs += np.outer(d3, node.hActs2)
+        self.dbs += d3
         
+        # d2 (delta_2 in notes)
+        d2 = self.Ws.T.dot(d3) * (node.hActs2 > 0)
+        
+        # W2 and b2
+        self.dW2 += np.outer(d2, node.hActs1)
+        self.db2 += d2
+            
+        # add the error from this step to the error passed from above
+        # the error from above is already multiplied by the right matrix
+        # i.e. already passed the affine transformation
+        # 
+        db = self.W2.T.dot(d2) + error
+
+        # Not leaf, update dW and db
+        if not node.isLeaf:
+            # pass the nonlinearity (derivative of RelU)
+            db *= node.hActs1 > 0
+            
+            # concatente left and right hidden activations
+            h = np.concatenate((node.left.hActs1, node.right.hActs1))
+            
+            # W and b
+            self.dW1 += np.outer(db, h)
+            self.db1 += db
+        
+            # back prop children
+            #
+            # left error
+            dbl = self.W1[:,:self.wvecDim].T.dot(db)
+            self.backProp(node.left, error = dbl)
+            # right error
+            dbr = self.W1[:,self.wvecDim:].T.dot(db)
+            self.backProp(node.right, error = dbr)
+        # Leaf, update L
+        else:
+            self.dL[node.word] += db
 
         
     def updateParams(self,scale,update,log=False):
