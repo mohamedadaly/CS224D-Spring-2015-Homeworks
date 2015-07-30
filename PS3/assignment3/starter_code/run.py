@@ -10,7 +10,7 @@ Created on Wed Jul 29 10:03:18 2015
 ###################
 
 # training params
-epochs=60
+epochs=41
 step=1e-2
 wvecDim=30
 

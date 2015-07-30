@@ -36,6 +36,7 @@ def run(args=None):
         default="adagrad")
     parser.add_option("--epochs",dest="epochs",type="int",default=50)
     parser.add_option("--step",dest="step",type="float",default=1e-2)
+    parser.add_option("--rho",dest="rho",type="float",default=1e-4)
 
 
     parser.add_option("--middleDim",dest="middleDim",type="int",default=10)
@@ -48,6 +49,7 @@ def run(args=None):
     parser.add_option("--m2",dest="m2",type="int",default=7)
     parser.add_option("--n1",dest="n1",type="int",default=6)
     parser.add_option("--n2",dest="n2",type="int",default=12)
+        
     
     parser.add_option("--outFile",dest="outFile",type="string",
         default="models/test.bin")
@@ -77,7 +79,7 @@ def run(args=None):
     opts.numWords = len(tr.loadWordMap())
 
     if (opts.model=='RNTN'):
-        nn = RNTN(opts.wvecDim,opts.outputDim,opts.numWords,opts.minibatch)
+        nn = RNTN(opts.wvecDim,opts.outputDim,opts.numWords,opts.minibatch,opts.rho)
     elif(opts.model=='RNN'):
         nn = RNN(opts.wvecDim,opts.outputDim,opts.numWords,opts.minibatch)
     elif(opts.model=='RNN2'):
@@ -122,16 +124,17 @@ def run(args=None):
 
 
     if evaluate_accuracy_while_training:
-        pdb.set_trace()
+#        pdb.set_trace()
         print train_accuracies
         print dev_accuracies
         # TODO:
         # Plot train/dev_accuracies here?
-        plt.figure()
-        plt.hold()
+        plt.figure(num=125)
+        plt.hold(True)
         plt.plot(train_accuracies, '-sr')
         plt.plot(dev_accuracies, '-dg')
         plt.legend(['Train', 'Dev'])
+        plt.ion()
         plt.show()
         
         # find best dev accuracy
@@ -178,11 +181,13 @@ def test(netFile,dataSet, model='RNN', trees=None):
     if show_conf:
         from sklearn.metrics import confusion_matrix as cf
         conf_arr = cf(correct, guess)
+        conf_arr = conf_arr.astype('float32') / conf_arr.sum()
         plt.figure()    
         plt.matshow(conf_arr)
         plt.ylabel('True label')
         plt.xlabel('Predicted label')
         plt.set_cmap('jet')
+        plt.colorbar()
         plt.show()
     
     print "Cost %f, Acc %f"%(cost,correct_sum/float(total))
