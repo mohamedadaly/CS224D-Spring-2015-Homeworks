@@ -10,8 +10,8 @@ Created on Wed Jul 29 10:03:18 2015
 ###################
 
 # training params
-epochs=60
-step=1e-2
+epochs=200
+step=1e-3
 wvecDim=30
 rho = 1e-4
 
